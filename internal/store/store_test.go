@@ -60,6 +60,32 @@ func TestEmptyDatabaseIsRejected(t *testing.T) {
 	}
 }
 
+func TestDatabaseStoresClientsAlphabetically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clients.json")
+	s := New(path)
+	for _, id := range []string{"zulu", "alpha", "mike"} {
+		if _, err := s.Add(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var database Database
+	if err := json.Unmarshal(raw, &database); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"alpha", "mike", "zulu"}
+	for i, id := range want {
+		if database.Clients[i].ID != id {
+			t.Fatalf("clients[%d] = %q, want %q", i, database.Clients[i].ID, id)
+		}
+	}
+}
+
 func TestConcurrentWritesRemainSerializedAcrossRenames(t *testing.T) {
 	s := New(filepath.Join(t.TempDir(), "clients.json"))
 	const count = 20

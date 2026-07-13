@@ -161,6 +161,7 @@ func (s *Store) withLock(exclusive bool, fn func(*Database) error) error {
 }
 
 func writeDatabase(directory, path string, db Database) error {
+	sort.Slice(db.Clients, func(i, j int) bool { return db.Clients[i].ID < db.Clients[j].ID })
 	encoded, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
 		return err
