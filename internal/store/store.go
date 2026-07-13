@@ -208,7 +208,7 @@ func newToken() (token, hash string, err error) {
 	if _, err := rand.Read(random); err != nil {
 		return "", "", fmt.Errorf("generate token: %w", err)
 	}
-	token = "hnddns_" + base64.RawURLEncoding.EncodeToString(random)
+	token = "ddns_" + base64.RawURLEncoding.EncodeToString(random)
 	sum := sha256.Sum256([]byte(token))
 	return token, hex.EncodeToString(sum[:]), nil
 }
