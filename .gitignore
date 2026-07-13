@@ -1,0 +1,4 @@
+/cloudflare-ddns
+/clients.json
+/clients.json.lock
+/.clients.json.tmp-*

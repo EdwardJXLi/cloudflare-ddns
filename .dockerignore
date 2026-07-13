@@ -1,0 +1,5 @@
+.git
+.github
+secrets
+*.md
+compose*.yaml

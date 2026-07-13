@@ -1,0 +1,15 @@
+services:
+  ddns:
+    image: cloudflare-ddns:local
+    build: .
+    command: agent
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HUB_URL: https://ddns.example.com
+      CLIENT_TOKEN: ${CLIENT_TOKEN:?CLIENT_TOKEN is required}
+      UPDATE_INTERVAL: 5m

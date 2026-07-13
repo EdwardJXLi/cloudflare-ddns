@@ -1,0 +1,29 @@
+services:
+  hub:
+    image: cloudflare-ddns:local
+    build: .
+    command: hub
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN:?CF_API_TOKEN is required}
+      ZONE: site.com
+      DATA_FILE: /data/clients.json
+      LISTEN_ADDR: :8080
+    volumes:
+      - hub_data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "/cloudflare-ddns", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  hub_data:
