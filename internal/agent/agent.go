@@ -19,6 +19,7 @@ type Config struct {
 	HubURL            string
 	Token             string
 	Subdomain         string
+	Zone              string
 	IPv4Provider      string
 	Interval          time.Duration
 	AllowInsecureHTTP bool
@@ -37,6 +38,10 @@ func New(config Config, logger *slog.Logger) (*Agent, error) {
 	config.Subdomain = strings.ToLower(strings.TrimSpace(config.Subdomain))
 	if config.Subdomain == "" {
 		return nil, errors.New("SUBDOMAIN is required")
+	}
+	config.Zone = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(config.Zone), "."))
+	if config.Zone == "" {
+		return nil, errors.New("ZONE is required")
 	}
 	hub, err := url.Parse(config.HubURL)
 	if err != nil || hub.Host == "" {
@@ -90,6 +95,7 @@ func (a *Agent) Update(ctx context.Context) error {
 	body, err := json.Marshal(map[string]string{
 		"address":   address,
 		"subdomain": a.config.Subdomain,
+		"zone":      a.config.Zone,
 	})
 	if err != nil {
 		return err

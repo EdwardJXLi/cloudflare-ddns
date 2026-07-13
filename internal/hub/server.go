@@ -29,6 +29,7 @@ type Server struct {
 type updateRequest struct {
 	Address   string `json:"address"`
 	Subdomain string `json:"subdomain"`
+	Zone      string `json:"zone"`
 }
 
 type recordResult struct {
@@ -91,6 +92,15 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 	if request.Subdomain != credential.ID {
 		s.logger.Warn("client subdomain mismatch", "client", credential.ID, "requested_subdomain", request.Subdomain)
 		writeError(w, http.StatusForbidden, "client token does not match subdomain")
+		return
+	}
+	if request.Zone == "" {
+		writeError(w, http.StatusBadRequest, "zone is required")
+		return
+	}
+	if request.Zone != s.zone {
+		s.logger.Warn("client zone mismatch", "client", credential.ID, "requested_zone", request.Zone)
+		writeError(w, http.StatusForbidden, "requested zone does not match hub zone")
 		return
 	}
 

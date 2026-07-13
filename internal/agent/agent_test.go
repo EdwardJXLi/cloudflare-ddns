@@ -18,6 +18,7 @@ func TestUpdateDiscoversAddressAndCallsHub(t *testing.T) {
 	defer provider.Close()
 	var gotAddress string
 	var gotSubdomain string
+	var gotZone string
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer client-secret" {
 			t.Error("wrong authorization")
@@ -25,15 +26,17 @@ func TestUpdateDiscoversAddressAndCallsHub(t *testing.T) {
 		var request struct {
 			Address   string `json:"address"`
 			Subdomain string `json:"subdomain"`
+			Zone      string `json:"zone"`
 		}
 		json.NewDecoder(r.Body).Decode(&request)
 		gotAddress = request.Address
 		gotSubdomain = request.Subdomain
+		gotZone = request.Zone
 		json.NewEncoder(w).Encode(map[string]any{"result": map[string]string{"name": "host.example.com", "type": "A", "status": "updated"}})
 	}))
 	defer hub.Close()
 	agent, err := New(Config{
-		HubURL: hub.URL, Token: "client-secret", Subdomain: "Host",
+		HubURL: hub.URL, Token: "client-secret", Subdomain: "Host", Zone: "Example.COM.",
 		IPv4Provider: provider.URL, Interval: time.Minute, AllowInsecureHTTP: true,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
@@ -48,18 +51,28 @@ func TestUpdateDiscoversAddressAndCallsHub(t *testing.T) {
 	if gotSubdomain != "host" {
 		t.Fatalf("subdomain = %q", gotSubdomain)
 	}
+	if gotZone != "example.com" {
+		t.Fatalf("zone = %q", gotZone)
+	}
 }
 
 func TestRequiresHTTPSByDefault(t *testing.T) {
-	_, err := New(Config{HubURL: "http://hub:8080", Token: "secret", Subdomain: "host", Interval: time.Minute}, slog.Default())
+	_, err := New(Config{HubURL: "http://hub:8080", Token: "secret", Subdomain: "host", Zone: "example.com", Interval: time.Minute}, slog.Default())
 	if err == nil {
 		t.Fatal("expected insecure URL error")
 	}
 }
 
 func TestRequiresSubdomain(t *testing.T) {
-	_, err := New(Config{HubURL: "https://hub.example.com", Token: "secret", Interval: time.Minute}, slog.Default())
+	_, err := New(Config{HubURL: "https://hub.example.com", Token: "secret", Zone: "example.com", Interval: time.Minute}, slog.Default())
 	if err == nil {
 		t.Fatal("expected missing subdomain error")
+	}
+}
+
+func TestRequiresZone(t *testing.T) {
+	_, err := New(Config{HubURL: "https://hub.example.com", Token: "secret", Subdomain: "host", Interval: time.Minute}, slog.Default())
+	if err == nil {
+		t.Fatal("expected missing zone error")
 	}
 }

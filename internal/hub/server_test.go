@@ -34,7 +34,7 @@ func TestUpdateCanOnlyUseConfiguredRecords(t *testing.T) {
 	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
 	defer server.Close()
 
-	body := `{"address":"192.0.2.40","subdomain":"server-a","hostname":"server-b.example.com"}`
+	body := `{"address":"192.0.2.40","subdomain":"server-a","zone":"example.com","hostname":"server-b.example.com"}`
 	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -47,7 +47,7 @@ func TestUpdateCanOnlyUseConfiguredRecords(t *testing.T) {
 		t.Fatalf("status=%d records=%+v", response.StatusCode, updater.records)
 	}
 
-	body = `{"address":"192.0.2.40","subdomain":"server-a"}`
+	body = `{"address":"192.0.2.40","subdomain":"server-a","zone":"example.com"}`
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	response, err = server.Client().Do(req)
@@ -75,7 +75,7 @@ func TestUpdateRejectsTokenForDifferentSubdomain(t *testing.T) {
 	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
 	defer server.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40","subdomain":"server-b"}`))
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40","subdomain":"server-b","zone":"example.com"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	response, err := server.Client().Do(req)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestUpdateRequiresSubdomain(t *testing.T) {
 	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
 	defer server.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40"}`))
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40","zone":"example.com"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	response, err := server.Client().Do(req)
 	if err != nil {
@@ -117,6 +117,44 @@ func TestUpdateRequiresSubdomain(t *testing.T) {
 	}
 }
 
+func TestUpdateRequiresMatchingZone(t *testing.T) {
+	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
+	token, err := credentials.Add("server-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updater := &fakeUpdater{}
+	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
+	defer server.Close()
+
+	tests := []struct {
+		name   string
+		body   string
+		status int
+	}{
+		{name: "missing", body: `{"address":"192.0.2.40","subdomain":"server-a"}`, status: http.StatusBadRequest},
+		{name: "mismatch", body: `{"address":"192.0.2.40","subdomain":"server-a","zone":"other.example"}`, status: http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(test.body))
+			req.Header.Set("Authorization", "Bearer "+token)
+			response, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+
+			if response.StatusCode != test.status {
+				t.Fatalf("status = %d, want %d", response.StatusCode, test.status)
+			}
+			if len(updater.records) != 0 {
+				t.Fatalf("invalid zone updated records: %+v", updater.records)
+			}
+		})
+	}
+}
+
 func TestUpdateRejectsBadToken(t *testing.T) {
 	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
 	token, _ := credentials.Add("server-a")
@@ -125,7 +163,7 @@ func TestUpdateRejectsBadToken(t *testing.T) {
 	defer server.Close()
 
 	request := func(token string) int {
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.1","subdomain":"server-a"}`))
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.1","subdomain":"server-a","zone":"example.com"}`))
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := server.Client().Do(req)
 		if err != nil {

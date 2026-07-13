@@ -13,4 +13,5 @@ services:
       HUB_URL: https://ddns.example.com
       CLIENT_TOKEN: ${CLIENT_TOKEN:?CLIENT_TOKEN is required}
       SUBDOMAIN: ${SUBDOMAIN:?SUBDOMAIN is required}
+      ZONE: ${ZONE:?ZONE is required}
       UPDATE_INTERVAL: 5m
