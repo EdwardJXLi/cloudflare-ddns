@@ -27,13 +27,17 @@ docker compose -f compose.hub.yaml exec hub \
   /cloudflare-ddns clients add name1
 ```
 
-Set the printed key in the `CLIENT_TOKEN` environment variable on the agent
-server, set `HUB_URL` in `compose.agent.yaml`, and start it:
+Set the printed key in `CLIENT_TOKEN` and the same client name in `SUBDOMAIN` on
+the agent server. Then set `HUB_URL` in `compose.agent.yaml` and start it:
 
 ```sh
 export CLIENT_TOKEN='THE_PRINTED_CLIENT_TOKEN'
+export SUBDOMAIN='name1'
 docker compose -f compose.agent.yaml up -d --build
 ```
+
+Every update includes `SUBDOMAIN`. The hub verifies that it matches the client
+identified by `CLIENT_TOKEN` and rejects mismatches before changing DNS.
 
 The agent checks its public IPv4 address every five minutes and asks the hub to
 update its assigned hostname. Keys can be listed, rotated, or removed through

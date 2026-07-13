@@ -34,7 +34,7 @@ func TestUpdateCanOnlyUseConfiguredRecords(t *testing.T) {
 	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
 	defer server.Close()
 
-	body := `{"address":"192.0.2.40","hostname":"server-b.example.com"}`
+	body := `{"address":"192.0.2.40","subdomain":"server-a","hostname":"server-b.example.com"}`
 	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -47,7 +47,7 @@ func TestUpdateCanOnlyUseConfiguredRecords(t *testing.T) {
 		t.Fatalf("status=%d records=%+v", response.StatusCode, updater.records)
 	}
 
-	body = `{"address":"192.0.2.40"}`
+	body = `{"address":"192.0.2.40","subdomain":"server-a"}`
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	response, err = server.Client().Do(req)
@@ -65,6 +65,58 @@ func TestUpdateCanOnlyUseConfiguredRecords(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsTokenForDifferentSubdomain(t *testing.T) {
+	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
+	token, err := credentials.Add("server-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updater := &fakeUpdater{}
+	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40","subdomain":"server-b"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	response, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+	if len(updater.records) != 0 {
+		t.Fatalf("mismatched subdomain updated records: %+v", updater.records)
+	}
+}
+
+func TestUpdateRequiresSubdomain(t *testing.T) {
+	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
+	token, err := credentials.Add("server-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updater := &fakeUpdater{}
+	server := httptest.NewServer(New(credentials, updater, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	response, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+	}
+	if len(updater.records) != 0 {
+		t.Fatalf("missing subdomain updated records: %+v", updater.records)
+	}
+}
+
 func TestUpdateRejectsBadToken(t *testing.T) {
 	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
 	token, _ := credentials.Add("server-a")
@@ -73,7 +125,7 @@ func TestUpdateRejectsBadToken(t *testing.T) {
 	defer server.Close()
 
 	request := func(token string) int {
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.1"}`))
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.1","subdomain":"server-a"}`))
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := server.Client().Do(req)
 		if err != nil {

@@ -162,6 +162,7 @@ func runAgent() error {
 	config := agent.Config{
 		HubURL:            os.Getenv("HUB_URL"),
 		Token:             token,
+		Subdomain:         os.Getenv("SUBDOMAIN"),
 		IPv4Provider:      envDefault("IPV4_PROVIDER", "https://api.ipify.org"),
 		Interval:          interval,
 		AllowInsecureHTTP: allowInsecureHTTP,

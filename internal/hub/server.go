@@ -27,7 +27,8 @@ type Server struct {
 }
 
 type updateRequest struct {
-	Address string `json:"address"`
+	Address   string `json:"address"`
+	Subdomain string `json:"subdomain"`
 }
 
 type recordResult struct {
@@ -81,6 +82,15 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		writeError(w, http.StatusBadRequest, "request must contain exactly one JSON object")
+		return
+	}
+	if request.Subdomain == "" {
+		writeError(w, http.StatusBadRequest, "subdomain is required")
+		return
+	}
+	if request.Subdomain != credential.ID {
+		s.logger.Warn("client subdomain mismatch", "client", credential.ID, "requested_subdomain", request.Subdomain)
+		writeError(w, http.StatusForbidden, "client token does not match subdomain")
 		return
 	}
 

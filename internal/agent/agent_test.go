@@ -17,20 +17,23 @@ func TestUpdateDiscoversAddressAndCallsHub(t *testing.T) {
 	}))
 	defer provider.Close()
 	var gotAddress string
+	var gotSubdomain string
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer client-secret" {
 			t.Error("wrong authorization")
 		}
 		var request struct {
-			Address string `json:"address"`
+			Address   string `json:"address"`
+			Subdomain string `json:"subdomain"`
 		}
 		json.NewDecoder(r.Body).Decode(&request)
 		gotAddress = request.Address
+		gotSubdomain = request.Subdomain
 		json.NewEncoder(w).Encode(map[string]any{"result": map[string]string{"name": "host.example.com", "type": "A", "status": "updated"}})
 	}))
 	defer hub.Close()
 	agent, err := New(Config{
-		HubURL: hub.URL, Token: "client-secret",
+		HubURL: hub.URL, Token: "client-secret", Subdomain: "Host",
 		IPv4Provider: provider.URL, Interval: time.Minute, AllowInsecureHTTP: true,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
@@ -42,11 +45,21 @@ func TestUpdateDiscoversAddressAndCallsHub(t *testing.T) {
 	if gotAddress != "192.0.2.55" {
 		t.Fatalf("address = %q", gotAddress)
 	}
+	if gotSubdomain != "host" {
+		t.Fatalf("subdomain = %q", gotSubdomain)
+	}
 }
 
 func TestRequiresHTTPSByDefault(t *testing.T) {
-	_, err := New(Config{HubURL: "http://hub:8080", Token: "secret", Interval: time.Minute}, slog.Default())
+	_, err := New(Config{HubURL: "http://hub:8080", Token: "secret", Subdomain: "host", Interval: time.Minute}, slog.Default())
 	if err == nil {
 		t.Fatal("expected insecure URL error")
+	}
+}
+
+func TestRequiresSubdomain(t *testing.T) {
+	_, err := New(Config{HubURL: "https://hub.example.com", Token: "secret", Interval: time.Minute}, slog.Default())
+	if err == nil {
+		t.Fatal("expected missing subdomain error")
 	}
 }
