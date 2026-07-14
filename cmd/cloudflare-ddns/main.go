@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"cloudflare-ddns/internal/agent"
@@ -77,7 +78,7 @@ Commands:
   agent                Run an agent that reports its public IPv4 address to the hub.
   healthcheck          Check whether the configured hub health endpoint is available.
   clients add NAME     Create a client and print its new token.
-  clients list         List all configured client names.
+  clients list         List clients and when they last contacted the hub.
   clients rotate NAME  Replace a client's token and print the new one.
   clients remove NAME  Remove a client and revoke its token.
 
@@ -204,11 +205,14 @@ func runClients(args []string) error {
 		if err != nil {
 			return err
 		}
+		writer := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(writer, "CLIENT\tLAST PING")
+		now := time.Now()
 		for _, client := range clients {
-			fmt.Println(client.ID)
+			fmt.Fprintf(writer, "%s\t%s\n", client.ID, formatLastPing(now, client.LastPing))
 		}
 
-		return nil
+		return writer.Flush()
 	}
 
 	if flags.NArg() != 1 {
@@ -243,6 +247,28 @@ func runClients(args []string) error {
 	}
 
 	return nil
+}
+
+func formatLastPing(now time.Time, lastPing *time.Time) string {
+	if lastPing == nil || lastPing.IsZero() {
+		return "never"
+	}
+
+	elapsed := now.Sub(*lastPing)
+	if elapsed < time.Second {
+		return "just now"
+	}
+	if elapsed < time.Minute {
+		return fmt.Sprintf("%ds ago", int(elapsed/time.Second))
+	}
+	if elapsed < time.Hour {
+		return fmt.Sprintf("%dm ago", int(elapsed/time.Minute))
+	}
+	if elapsed < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(elapsed/time.Hour))
+	}
+
+	return fmt.Sprintf("%dd ago", int(elapsed/(24*time.Hour)))
 }
 
 func validateClientName(name string) error {

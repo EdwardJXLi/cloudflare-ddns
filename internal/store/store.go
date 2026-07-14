@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const CurrentVersion = 1
@@ -26,8 +27,9 @@ type Database struct {
 }
 
 type Credential struct {
-	ID        string `json:"id"`
-	TokenHash string `json:"token_hash"`
+	ID        string     `json:"id"`
+	TokenHash string     `json:"token_hash"`
+	LastPing  *time.Time `json:"last_ping,omitempty"`
 }
 
 type Store struct {
@@ -67,6 +69,23 @@ func (s *Store) Authenticate(token string) (Credential, error) {
 		return ErrNotFound
 	})
 	return found, err
+}
+
+func (s *Store) RecordPing(id string, at time.Time) error {
+	at = at.UTC()
+	return s.withLock(true, func(db *Database) error {
+		for i := range db.Clients {
+			if db.Clients[i].ID != id {
+				continue
+			}
+			if db.Clients[i].LastPing == nil || at.After(*db.Clients[i].LastPing) {
+				lastPing := at
+				db.Clients[i].LastPing = &lastPing
+			}
+			return nil
+		}
+		return ErrNotFound
+	})
 }
 
 func (s *Store) Add(id string) (string, error) {

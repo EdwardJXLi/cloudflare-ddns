@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestCredentialLifecycle(t *testing.T) {
@@ -83,6 +84,42 @@ func TestDatabaseStoresClientsAlphabetically(t *testing.T) {
 		if database.Clients[i].ID != id {
 			t.Fatalf("clients[%d] = %q, want %q", i, database.Clients[i].ID, id)
 		}
+	}
+}
+
+func TestRecordPingPersistsLatestTime(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clients.json")
+	s := New(path)
+	if _, err := s.Add("host"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add("never-seen"); err != nil {
+		t.Fatal(err)
+	}
+
+	lastPing := time.Date(2026, time.July, 13, 18, 30, 0, 0, time.FixedZone("EDT", -4*60*60))
+	if err := s.RecordPing("host", lastPing); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordPing("host", lastPing.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	clients, err := New(path).List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clients[0].ID != "host" || clients[0].LastPing == nil || !clients[0].LastPing.Equal(lastPing) {
+		t.Fatalf("recorded client = %+v, want last ping %s", clients[0], lastPing)
+	}
+	if clients[0].LastPing.Location() != time.UTC {
+		t.Fatalf("last ping location = %v, want UTC", clients[0].LastPing.Location())
+	}
+	if clients[1].ID != "never-seen" || clients[1].LastPing != nil {
+		t.Fatalf("unseen client = %+v, want no last ping", clients[1])
+	}
+	if err := s.RecordPing("missing", lastPing); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing client error = %v, want %v", err, ErrNotFound)
 	}
 }
 

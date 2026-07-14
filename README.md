@@ -44,7 +44,19 @@ mismatches before changing DNS.
 
 The agent checks its public IPv4 address every five minutes and asks the hub to
 update its assigned hostname. Keys can be listed, rotated, or removed through
-the hub's `clients` command.
+the hub's `clients` command. The list also shows how long ago each client last
+made an authenticated request to the hub:
+
+```sh
+docker compose -f compose.hub.yaml exec hub \
+  /cloudflare-ddns clients list
+```
+
+```text
+CLIENT       LAST PING
+home-server  3m ago
+backup       never
+```
 
 ## Development
 

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"cloudflare-ddns/internal/cloudflare"
 	"cloudflare-ddns/internal/store"
@@ -177,6 +178,45 @@ func TestUpdateRejectsBadToken(t *testing.T) {
 	}
 	if got := request(token); got != http.StatusOK {
 		t.Fatalf("valid token status=%d", got)
+	}
+}
+
+func TestUpdateRecordsAuthenticatedClientPing(t *testing.T) {
+	credentials := store.New(filepath.Join(t.TempDir(), "clients.json"))
+	token, err := credentials.Add("server-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := credentials.Add("server-b"); err != nil {
+		t.Fatal(err)
+	}
+
+	fixedTime := time.Date(2026, time.July, 13, 20, 15, 0, 0, time.UTC)
+	service := New(credentials, &fakeUpdater{}, "zone-id", "example.com", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.now = func() time.Time { return fixedTime }
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/v1/update", strings.NewReader(`{"address":"192.0.2.40","subdomain":"server-a","zone":"example.com"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	response, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	clients, err := credentials.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clients[0].ID != "server-a" || clients[0].LastPing == nil || !clients[0].LastPing.Equal(fixedTime) {
+		t.Fatalf("updated client = %+v, want ping at %s", clients[0], fixedTime)
+	}
+	if clients[1].ID != "server-b" || clients[1].LastPing != nil {
+		t.Fatalf("unseen client = %+v, want no last ping", clients[1])
 	}
 }
 

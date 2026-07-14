@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"time"
 
 	"cloudflare-ddns/internal/cloudflare"
 	"cloudflare-ddns/internal/store"
@@ -24,6 +25,7 @@ type Server struct {
 	logger     *slog.Logger
 	zoneID     string
 	zone       string
+	now        func() time.Time
 }
 
 type updateRequest struct {
@@ -41,7 +43,7 @@ type recordResult struct {
 
 func New(credentials *store.Store, updater DNSUpdater, zoneID, zone string, logger *slog.Logger) *Server {
 	return &Server{
-		store: credentials, cloudflare: updater, zoneID: zoneID, zone: zone, logger: logger,
+		store: credentials, cloudflare: updater, zoneID: zoneID, zone: zone, logger: logger, now: time.Now,
 	}
 }
 
@@ -71,6 +73,9 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 		}
 		unauthorized(w)
 		return
+	}
+	if err := s.store.RecordPing(credential.ID, s.now()); err != nil {
+		s.logger.Error("record client ping", "client", credential.ID, "error", err)
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
